@@ -1,0 +1,11 @@
+[package]
+name = "cam-tool"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+pretty_env_logger = "0.5"
+clap = { version = "4", features = ["derive"] }
+log = "0.4"
+nix = { version = "0.29", features = ["fs"] }
