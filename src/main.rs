@@ -4,8 +4,8 @@ use log::{LevelFilter, info};
 use std::collections::VecDeque;
 use std::ffi::OsStr;
 use std::ffi::OsString;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::{fs, io};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -26,8 +26,8 @@ enum Command {
         #[arg(short, long)]
         target_use_percentage: u8,
 
-        #[arg(long, default_value_t = true)]
-        dry_run: bool,
+        #[arg(long)]
+        actually_rm: bool,
     },
 }
 
@@ -44,7 +44,7 @@ fn main() -> Result<()> {
             directory,
             filter_extensions,
             target_use_percentage,
-            dry_run,
+            actually_rm,
         } => {
             let directory = directory.canonicalize()?;
             let use_percentage = read_use_percentage(&directory)?;
@@ -59,7 +59,7 @@ fn main() -> Result<()> {
                     break;
                 }
                 info!("should remove: {:?}", candidate);
-                if !dry_run {
+                if actually_rm {
                     fs::remove_file(&candidate)?;
                 }
             }
@@ -73,7 +73,7 @@ fn find_matching_files(
     filter_extensions: Vec<OsString>,
 ) -> Result<VecDeque<PathBuf>> {
     let mut matches = Vec::with_capacity(1024);
-    for entry in fs::read_dir(directory)? {
+    for entry in walkdir::WalkDir::new(directory).into_iter() {
         match dir_entry_to_modified(entry) {
             Ok(Some((path, modified))) => {
                 let ext = match path.extension() {
@@ -101,19 +101,21 @@ fn read_use_percentage(directory: impl AsRef<Path>) -> Result<u8> {
     Ok(use_percentage)
 }
 
-fn dir_entry_to_modified(entry: io::Result<fs::DirEntry>) -> Result<Option<(PathBuf, u64)>> {
+fn dir_entry_to_modified(
+    entry: walkdir::Result<walkdir::DirEntry>,
+) -> Result<Option<(PathBuf, u64)>> {
     let entry = entry?;
-    if !entry.file_type()?.is_file() {
+    if !entry.file_type().is_file() {
         return Ok(None);
     }
 
     let path = entry.path();
 
     let modified = get_file_modified(&entry).with_context(|| anyhow!("reading {:?}", &path))?;
-    Ok(Some((path, modified)))
+    Ok(Some((path.to_path_buf(), modified)))
 }
 
-fn get_file_modified(entry: &fs::DirEntry) -> Result<u64> {
+fn get_file_modified(entry: &walkdir::DirEntry) -> Result<u64> {
     Ok(entry
         .metadata()?
         .modified()?
