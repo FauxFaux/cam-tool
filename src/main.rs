@@ -62,10 +62,20 @@ fn main() -> Result<()> {
                 if actually_rm {
                     fs::remove_file(&candidate)?;
                 }
+                sync_all_the_way_down(&candidate)?;
             }
             Ok(())
         }
     }
+}
+
+fn sync_all_the_way_down(starting_file: impl AsRef<Path>) -> Result<()> {
+    let mut current = starting_file.as_ref();
+    while let Some(parent) = current.parent() {
+        fs::File::open(parent)?.sync_all()?;
+        current = parent;
+    }
+    Ok(())
 }
 
 fn find_matching_files(
